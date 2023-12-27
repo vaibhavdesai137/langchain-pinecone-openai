@@ -1,5 +1,0 @@
-openai == 0.28.1
-langchain
-langchain_experimental
-python-dotenv
-tiktoken
