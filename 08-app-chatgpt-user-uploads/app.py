@@ -7,7 +7,7 @@
 # ---------------
 # **Project Setup**
 # - Same as 05-app-rag-netflix-engagement
-# - But instead on a self generated dataset from imdb bout top movies in 2023
+# - But instead on a dataset uploaded by the user
 # - A nice UI using Streamlit to provide a ChatGPT like interface
 # ---------------
 
@@ -15,9 +15,23 @@ import pinecone
 import streamlit as st
 
 # load from local docs
-def load_document(file_name):
-  from langchain.document_loaders.csv_loader import CSVLoader
-  loader = CSVLoader(file_name)
+def load_document(file_path):
+  import os
+  name, ext = os.path.splitext(file_path)
+  
+  if ext == '.txt':
+    from langchain.document_loaders import TextLoader
+    loader = TextLoader(file_path)
+  elif ext == '.csv':
+    from langchain.document_loaders.csv_loader import CSVLoader
+    loader = CSVLoader(file_path)
+  elif ext == '.pdf':
+    from langchain.document_loaders import PyPDFLoader
+    loader = PyPDFLoader(file_path)  
+  else:
+    print(f'unsupported file type: {ext}')
+    return None
+  
   return loader.load()
 
 
@@ -98,20 +112,13 @@ def get_answers(vector_store, query, k=3):
   return resp
 
 
-# same as above but with memory i.e context awareness
-def get_answers_with_memory(vector_store, query, chat_history=[]):
-  from langchain.chat_models import ChatOpenAI
-  from langchain.chains import ConversationalRetrievalChain
-  
-  llm = ChatOpenAI(model='gpt-3.5-turbo', temperature=0)
-  retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': 3})
-  
-  crc = ConversationalRetrievalChain.from_llm(llm=llm, retriever=retriever)
-  resp = crc({'question': query, 'chat_history': chat_history})
-  chat_history.append((query, resp['answer']))
-  return resp, chat_history
+# clear history when a new dataset is uploaded
+def clear_history():
+  if 'history' in st.session_state:
+    del st.session_state['history']
 
 
+# main
 if __name__ == '__main__':
   
   import os
@@ -123,15 +130,15 @@ if __name__ == '__main__':
   st.image('./static/images/llm.jpeg')
   st.subheader('Ask a question')
   
+  # sidebar
   with st.sidebar:
     st.title('Influence LLM response')
     
     # get user inputs to influence the model
-    dataset = st.file_uploader('Upload CSV Dataset', type=['csv'])
-    chunk_size = st.number_input('Chunk Size', min_value=128, max_value=2056, value=512)
-    chunk_overlap = st.number_input('Chunk Overlap', min_value=0, max_value=20, value=10)
-    k = st.number_input('K', min_value=1, max_value=20, value=3)    
-    upload_btn = st.button('Upload')
+    dataset = st.file_uploader('Upload CSV Dataset', type=['txt', 'csv', 'pdf'])
+    chunk_size = st.number_input('Chunk Size', min_value=128, max_value=2056, value=1024, on_change=clear_history)
+    chunk_overlap = st.number_input('Chunk Overlap', min_value=0, max_value=20, value=20, on_change=clear_history)
+    upload_btn = st.button('Upload', on_click=clear_history)
     
     # dataset uploaded & button clicked
     if upload_btn and dataset:
@@ -164,9 +171,33 @@ if __name__ == '__main__':
       # create pinecone index and insert embeddings
       f'creating embeddings...'
       delete_pinecone_index('all')
-      idx_name = dataset.name.replace('_', '-').replace('.csv', '')
+      idx_name = os.path.splitext(dataset.name)[0].replace('_', '-')
       vector_store = insert_or_fetch_embeddings(idx_name, chunks)
       f'done'
       
-      # success
+      # save vector store in streamlit state
+      st.session_state.vs = vector_store
+      
+      # success      
       st.success('Dataset uploaded, chunked & embedded successfully')
+      
+  # main content
+  q = st.text_input('Ask a question about your dataset')
+  k = st.number_input('K (Determines how many chunks LLM will retrieve before answering)', min_value=1, max_value=20, value=5)
+  if q and k:
+    if 'vs' not in st.session_state:
+      st.error('Upload a dataset first')
+    else:
+      vector_store = st.session_state.vs
+      ans = get_answers(vector_store, q, k)
+      st.text_area('Answer: ', value=ans)
+
+    st.divider()
+    
+    # show chat history
+    if 'history' not in st.session_state:
+      st.session_state.history = ''
+    value = f'Q: {q}\nK: {k}\nA: {ans}'
+    st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
+    h = st.session_state.history
+    st.text_area('Chat History', value=h, height=400)
