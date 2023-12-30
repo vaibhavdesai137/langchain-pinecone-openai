@@ -11,25 +11,22 @@
 # - A nice UI using Streamlit to provide a ChatGPT like interface
 # ---------------
 
-import os
 import pinecone
-
+import streamlit as st
 
 # load from local docs
-def load_movies_csv():
-  current_dir = os.path.dirname(os.path.realpath(__file__))
+def load_document(file_name):
   from langchain.document_loaders.csv_loader import CSVLoader
-  dataset_path = current_dir + '/dataset/imdb_top_movies_2023.csv'
-  loader = CSVLoader(dataset_path)
+  loader = CSVLoader(file_name)
   return loader.load()
 
 
 # create chunks
-def chunk_data(data, chunk_size=256):
+def chunk_data(data, chunk_size=256, chunk_overlap=20):
   from langchain.text_splitter import RecursiveCharacterTextSplitter
   text_splitter = RecursiveCharacterTextSplitter(
     chunk_size = chunk_size,
-    chunk_overlap = 10
+    chunk_overlap = chunk_overlap
   )
   chunks = text_splitter.split_documents(data)
   return chunks
@@ -41,8 +38,7 @@ def get_embedding_cost(chunks):
   enc = tiktoken.encoding_for_model('text-embedding-ada-002')
   total_tokens = sum([len(enc.encode(page.page_content)) for page in chunks])
   cost = (total_tokens / 1000 * 0.0004)
-  print(f'total tokens: {total_tokens}')
-  return cost
+  return total_tokens, cost
 
 
 # delete a given pinecone index or all indexes
@@ -87,13 +83,13 @@ def insert_or_fetch_embeddings(idx_name, chunks):
 
 # get chunks from vector store based on similarity index
 # pass those chunks to LLM to get answers in natural language
-def get_answers(vector_store, query):
+def get_answers(vector_store, query, k=3):
   from langchain.chains import RetrievalQA
   from langchain.chat_models import ChatOpenAI
   
   # retriever makes it easy to combine documents with llms
   llm = ChatOpenAI(model='gpt-3.5-turbo', temperature=1.0)
-  retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': 5})
+  retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': k})
 
   # create a chain that combines llm & retriever
   # chain_type='stuff' is a predefined chain that uses all text from documents
@@ -116,40 +112,61 @@ def get_answers_with_memory(vector_store, query, chat_history=[]):
   return resp, chat_history
 
 
-# --------------------------------------------------
-
-# load env vars
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
-
-# load dataset
-data = load_movies_csv()
-print(f'total records: {len(data)}')
+if __name__ == '__main__':
   
-# create chunks
-chunks = chunk_data(data)
-print(f'total chunks: {len(chunks)}')
-
-# get embedding cost
-cost = get_embedding_cost(chunks)
-print(f'embedding cost: {cost:.6f}')
-
-# create pinecone index and insert embeddings
-delete_pinecone_index('all')
-idx_name = 'imdb-top-movies-2023'
-vector_store = insert_or_fetch_embeddings(idx_name, chunks)
-
-while True:
+  import os
   
-  query = input('your prompt: ')
+  # load env vars
+  from dotenv import load_dotenv, find_dotenv
+  load_dotenv(find_dotenv(), override=True)
   
-  # break if user wants to quit
-  if query in ['quit', 'exit', 'bye', 'q']:
-    print('Goodbye!')
-    break
+  st.image('./static/images/llm.jpeg')
+  st.subheader('Ask a question')
   
-  # else ask the model for a response
-  resp = get_answers(vector_store, query)
-  print(f'prompt: {query}')
-  print(f'resp: {resp}')
-  print('_' * 50)
+  with st.sidebar:
+    st.title('Influence LLM response')
+    
+    # get user inputs to influence the model
+    dataset = st.file_uploader('Upload CSV Dataset', type=['csv'])
+    chunk_size = st.number_input('Chunk Size', min_value=128, max_value=2056, value=512)
+    chunk_overlap = st.number_input('Chunk Overlap', min_value=0, max_value=20, value=10)
+    k = st.number_input('K', min_value=1, max_value=20, value=3)    
+    upload_btn = st.button('Upload')
+    
+    # dataset uploaded & button clicked
+    if upload_btn and dataset:
+      st.spinner('Loading dataset...')
+      
+      # save dataset to a file in uploads folder
+      bytes = dataset.read()
+      dataset_file_name = os.path.join('./uploads/', dataset.name)
+      with open(dataset_file_name, 'wb') as f:
+        f.write(bytes)
+    
+      # load dataset
+      f'loading dataset...'
+      data = load_document(dataset_file_name)
+      f'records: {len(data)}'
+      st.divider()
+    
+      # create chunks
+      f'creating chunks...'
+      chunks = chunk_data(data, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+      f'chunks: {len(chunks)}'
+      st.divider()
+
+      # get embeddings cost
+      f'calculating tokens & embeddings cost...'
+      tokens, cost = get_embedding_cost(chunks)
+      f'tokens: {tokens}, cost: {cost:.6f}'
+      st.divider()
+      
+      # create pinecone index and insert embeddings
+      f'creating embeddings...'
+      delete_pinecone_index('all')
+      idx_name = dataset.name.replace('_', '-').replace('.csv', '')
+      vector_store = insert_or_fetch_embeddings(idx_name, chunks)
+      f'done'
+      
+      # success
+      st.success('Dataset uploaded, chunked & embedded successfully')
