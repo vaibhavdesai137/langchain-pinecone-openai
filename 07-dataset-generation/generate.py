@@ -5,16 +5,19 @@ import pandas as pd
 # fetch and parse IMDB top movies page for 2023
 def get_imdb_top_movies_2023():
   
+  print('Getting IMDB top movies for 2023')
   url = "https://www.imdb.com/list/ls562197817/?sort=user_rating,desc&mode=detail"
   response = requests.get(url)
   movies_data = []
 
   if response.status_code == 200:
-    
+    print('Parsing content')
     soup = BeautifulSoup(response.content, 'html.parser')
     movie_rows = soup.findAll('div', attrs={'class': 'lister-item mode-detail'})
     
-    for row in movie_rows:
+    for i, row in enumerate(movie_rows):
+      
+      print(f'Parsing row {i}')
       
       # tite, rank, year, rating, runtime, genre, votes
       title = row.h3.a.text
@@ -23,7 +26,7 @@ def get_imdb_top_movies_2023():
       rating = row.find('span', class_ = 'ipl-rating-star__rating').text.replace('\n', '')
       runtime = row.p.find('span', class_ = 'runtime').text.replace(' min', '')
       genre = row.p.find('span', class_ = 'genre').text.strip()
-      votes = row.find_all('span', attrs = {'name': 'nv'}).text
+      votes = row.find('span', attrs = {'name': 'nv'}).text
       
       certificate = '-1'
       certificate_found = row.find('span', class_ = 'certificate')
@@ -50,7 +53,6 @@ def get_imdb_top_movies_2023():
         'Certificate': certificate,
         'Metascore': metascore,
         'Votes': votes,
-        'Gross': gross,
         'Description': description
       })
     
