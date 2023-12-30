@@ -27,7 +27,10 @@ def load_document(file_path):
     loader = CSVLoader(file_path)
   elif ext == '.pdf':
     from langchain.document_loaders import PyPDFLoader
-    loader = PyPDFLoader(file_path)  
+    loader = PyPDFLoader(file_path)
+  elif ext == '.json':
+    from langchain.document_loaders import JSONLoader
+    loader = JSONLoader(file_path)
   else:
     print(f'unsupported file type: {ext}')
     return None
@@ -127,15 +130,24 @@ if __name__ == '__main__':
   from dotenv import load_dotenv, find_dotenv
   load_dotenv(find_dotenv(), override=True)
   
-  st.image('./static/images/llm.jpeg')
-  st.subheader('Ask a question')
+  st.subheader('Retrieval-Augmented Generation (RAG)')
+  st.write("LLMs can only answers questions based on what they have learnt. With RAG, we can feed new/updated data into LLMs to make them more accurate & reliable.")
+  st.markdown("- Provide inputs on left sidebar")
+  st.markdown("- Give it a few secs to upload & embed the dataset")
+  st.markdown("- Once done, start asking questions about the dataset")
+  st.markdown('''
+    <style>
+      [data-testid="stMarkdownContainer"] ul {
+        padding-left: 20px;
+      }
+    </style>
+  ''', unsafe_allow_html=True)
+  st.divider()
   
   # sidebar
   with st.sidebar:
-    st.title('Influence LLM response')
-    
     # get user inputs to influence the model
-    dataset = st.file_uploader('Upload CSV Dataset', type=['txt', 'csv', 'pdf'])
+    dataset = st.file_uploader('Choose A Dataset', type=['txt', 'csv', 'pdf', 'json'], accept_multiple_files=False)
     chunk_size = st.number_input('Chunk Size', min_value=128, max_value=2056, value=1024, on_change=clear_history)
     chunk_overlap = st.number_input('Chunk Overlap', min_value=0, max_value=20, value=20, on_change=clear_history)
     upload_btn = st.button('Upload', on_click=clear_history)
