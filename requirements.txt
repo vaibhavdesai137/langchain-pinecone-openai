@@ -6,5 +6,6 @@ python-dotenv
 tiktoken
 wikipedia
 streamlit
+streamlit-chat
 requests
 pypdf

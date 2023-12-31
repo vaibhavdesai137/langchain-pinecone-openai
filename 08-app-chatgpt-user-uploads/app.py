@@ -1,3 +1,6 @@
+# first install required packages using "pip install -r requirements.txt"
+# then run using: streamlit run app.py
+#
 # ---------------
 # **Retrieval Augmented Generation**
 # - Retrieval Augmented Generation (RAG) is a technique for enhancing the accuracy and reliability of generative AI models with facts fetched from external sources
