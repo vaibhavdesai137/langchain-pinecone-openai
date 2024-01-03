@@ -33,7 +33,7 @@
   - building on top of previous example
   - in-memory list of Q&A maintained after each question
   - for each new question, the in-memory list is passed to LLM
-  - this help's LLM give contextual answers  
+  - this helps LLM give contextual answers  
 - One with persistance
   - building on top of previous example
   - sessions saved to json & can be loaded from disk
@@ -63,7 +63,6 @@
 ### 09-app-text-summaries
 - Summarizing using basic prompts
 - Summarizing using prompt templates
-- Summarizing using StuffDocumentsChain
 - Summarizing using StuffDocumentsChain
 - Summarizing using "map-reduce"
   - with default prompts
